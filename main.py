@@ -22,7 +22,6 @@ total_invest_available = float(args.total_invest_available)
 
 stdev_max = 0.02
 return_field = "fiveYearAverageReturn"
-share_price_field = "open"
 correlation_field = "Close"
 
 ticker_cache = None
@@ -37,6 +36,24 @@ try:
 except:
     logging.error(traceback.format_exc())
     ticker_cache = {}
+
+
+def set_security_price_field(fields_to_attempt: list):
+    while len(fields_to_attempt) > 0:
+        field = fields_to_attempt.pop(0)
+        if None in [x.get(field) for _, x in ticker_cache.items()]:
+            logging.warning(
+                "some tickers missing '%s' field, trying different field", field
+            )
+            continue
+        else:
+            logging.info("using '%s' field for security price", field)
+            return field
+
+
+security_price_field = set_security_price_field(["ask", "close", "open", "navPrice"])
+
+logging.info("using '%s' field for security price", security_price_field)
 
 
 def download_stock_data(ticker_name):
@@ -101,16 +118,16 @@ variance_max = stdev_max**2
 
 total_invest_minus_target = (
     total_invest_available
-    - int(total_invest_available / ticker_cache[anchor_ticker][share_price_field])
-    * ticker_cache[anchor_ticker][share_price_field]
+    - int(total_invest_available / ticker_cache[anchor_ticker][security_price_field])
+    * ticker_cache[anchor_ticker][security_price_field]
 )
 
 # select tickers to filter here
 valid_tickers = {}
 for ticker_name, x in ticker_cache.items():
     if (
-        x.get(share_price_field)
-        and x[share_price_field] < total_invest_minus_target
+        x.get(security_price_field)
+        and x[security_price_field] < total_invest_minus_target
         and x.get("stdev")
         and (
             x["stdev"]
@@ -128,10 +145,10 @@ result = None
 try:
     profits = [int(x["stdev"] ** -1) for ticker_name, x in valid_tickers.items()]
     weights = [
-        int(x[share_price_field]) * SHIFT for ticker_name, x in valid_tickers.items()
+        int(x[security_price_field]) * SHIFT for ticker_name, x in valid_tickers.items()
     ]
     n_items = [
-        int(total_invest_minus_target / x[share_price_field])
+        int(total_invest_minus_target / x[security_price_field])
         for ticker_name, x in valid_tickers.items()
     ]
     capacity = int(total_invest_minus_target) * SHIFT
@@ -146,29 +163,34 @@ except mknapsack_exceptions.FortranInputCheckError as e:
 
 print(list(result))
 
+total_invest_calculated = 0
 i = 0
-print("tickername", "count", share_price_field, return_field, "correlationFactor")
+print("tickername", "count", security_price_field, return_field, "correlationFactor")
 print(
     anchor_ticker,
-    int(total_invest_available / ticker_cache[anchor_ticker][share_price_field]),
-    ticker_cache[anchor_ticker][share_price_field],
+    int(total_invest_available / ticker_cache[anchor_ticker][security_price_field]),
+    ticker_cache[anchor_ticker][security_price_field],
     ticker_cache[anchor_ticker].get(return_field),
     ticker_cache[anchor_ticker]["correlationFactor"],
+)
+total_invest_calculated += (
+    int(total_invest_available / ticker_cache[anchor_ticker][security_price_field])
+    * ticker_cache[anchor_ticker][security_price_field]
 )
 for ticker_name in [ticker_name for ticker_name, x in valid_tickers.items()]:
     if result[i] > 0:
         print(
             ticker_name,
             result[i],
-            ticker_cache[ticker_name][share_price_field],
+            ticker_cache[ticker_name][security_price_field],
             ticker_cache[ticker_name].get(return_field),
             ticker_cache[ticker_name]["correlationFactor"],
         )
-        total_invest_minus_target -= (
-            result[i] * ticker_cache[ticker_name][share_price_field]
+        total_invest_calculated += (
+            result[i] * ticker_cache[ticker_name][security_price_field]
         )
     i += 1
-print(total_invest_minus_target)
+print(total_invest_calculated)
 
 try:
     with open("ticker_cache.json", "w") as f:
