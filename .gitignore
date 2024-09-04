@@ -1,0 +1,3 @@
+*.pyc
+ticker_cache.json
+tickers.txt
