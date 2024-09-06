@@ -44,7 +44,7 @@ try:
         ticker_cache = multiprocessing.Manager().dict()
     else:
         with open("ticker_cache.json") as f:
-            ticker_cache = json.loads(f.read())
+            ticker_cache = multiprocessing.Manager().dict(json.loads(f.read()))
 
 except:  # noqa: E722
     logging.error(traceback.format_exc())
@@ -87,6 +87,8 @@ with open("tickers.txt") as f:
     with multiprocessing.Pool(processes=48) as p:
         p.map(download_stock_data, ticker_names)
     ticker_cache = dict(ticker_cache)
+
+logging.debug(sorted(ticker_cache.keys()))
 
 
 def set_security_price_field(fields_to_attempt: list):
