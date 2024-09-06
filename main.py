@@ -12,6 +12,8 @@ import multiprocessing
 import yahooquery
 from numpy import nan
 
+logging.basicConfig()
+logger = logging.getLogger("poorboy")
 
 parser = ArgumentParser()
 parser.add_argument("-a", "--anchor", help="Anchor ticker")
@@ -26,9 +28,9 @@ parser.add_argument("--verbose", "-v", action="count", default=0)
 args = parser.parse_args()
 
 if args.verbose == 1:
-    logging.basicConfig(level=logging.INFO)
+    logger.setLevel(logging.INFO)
 elif args.verbose > 1:
-    logging.basicConfig(level=logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 anchor_ticker = args.anchor
 total_invest_available = float(args.total_invest_available)
@@ -47,20 +49,20 @@ try:
             ticker_cache = multiprocessing.Manager().dict(json.loads(f.read()))
 
 except:  # noqa: E722
-    logging.error(traceback.format_exc())
+    logger.error(traceback.format_exc())
     ticker_cache = multiprocessing.Manager().dict()
 
 
 def download_stock_data(ticker_name):
 
-    logging.info("Download " + ticker_name)
+    logger.info("Download " + ticker_name)
     ticker = yf.Ticker(ticker_name)
     yq_ticker = yahooquery.Ticker(ticker_name)
     result = ticker.info | {
         "history": json.loads(ticker.history(period="5y", interval="1d").to_json())
     }
-    logging.debug(ticker_name)
-    logging.debug(yq_ticker.fund_profile[ticker_name])
+    logger.debug(ticker_name)
+    logger.debug(yq_ticker.fund_profile[ticker_name])
     try:
         result.update(
             {
@@ -88,7 +90,7 @@ with open("tickers.txt") as f:
         p.map(download_stock_data, ticker_names)
     ticker_cache = dict(ticker_cache)
 
-logging.debug(sorted(ticker_cache.keys()))
+logger.debug(sorted(ticker_cache.keys()))
 
 
 def set_security_price_field(fields_to_attempt: list):
@@ -96,13 +98,13 @@ def set_security_price_field(fields_to_attempt: list):
         field = fields_to_attempt.pop(0)
         # if None in [x.get(field) for _, x in ticker_cache.items()]:
         if ticker_cache[anchor_ticker].get(field) is None:
-            logging.warning(
+            logger.warning(
                 "some tickers missing '%s' field, trying different field", field
             )
             continue
 
         else:
-            logging.info("using '%s' field for security price", field)
+            logger.info("using '%s' field for security price", field)
             return field
 
 
@@ -115,7 +117,7 @@ def stdev(a, b):
     return round((b - a) ** 2, 8)
 
 
-logging.debug(pformat(ticker_cache[anchor_ticker]))
+logger.debug(pformat(ticker_cache[anchor_ticker]))
 
 corr_query = [
     (
@@ -128,7 +130,7 @@ corr_query = [
 ]
 corr_query = sorted(corr_query, key=lambda x: x[1].to_dict()[correlation_field])
 for x in corr_query:
-    logging.debug("%s %f", x[0], x[1].to_dict()[correlation_field])
+    logger.debug("%s %f", x[0], x[1].to_dict()[correlation_field])
     # ticker_cache[x[0]]["correlation"] = x[1].to_dict()
     ticker_cache[x[0]]["correlationFactor"] = x[1].to_dict()[correlation_field]
 
@@ -146,18 +148,18 @@ stdev_query = [
 stdev_query = sorted(stdev_query, key=lambda x: x[1], reverse=True)
 for x in stdev_query:
     ticker_cache[x[0]]["stdev"] = x[1]
-logging.debug(pformat(stdev_query))
+logger.debug(pformat(stdev_query))
 
 SHIFT = 10**4
 variance_max = stdev_max**2
-logging.debug(pformat(ticker_cache[anchor_ticker]))
+logger.debug(pformat(ticker_cache[anchor_ticker]))
 
 total_invest_minus_target = (
     total_invest_available
     - int(total_invest_available / ticker_cache[anchor_ticker][security_price_field])
     * ticker_cache[anchor_ticker][security_price_field]
 )
-logging.info(total_invest_minus_target)
+logger.info(total_invest_minus_target)
 
 # select tickers to filter here
 valid_tickers = {}
@@ -178,7 +180,7 @@ for ticker_name, x in ticker_cache.items():
         and x.get("correlationFactor") != nan
         # and x.get("netExpenseRatio") < ticker_cache[anchor_ticker].get("netExpenseRatio")
     ):
-        logging.debug(x["stdev"])
+        logger.debug(x["stdev"])
         valid_tickers[ticker_name] = x
 
 result = None
@@ -196,8 +198,8 @@ try:
         for ticker_name, x in valid_tickers.items()
     ]
     capacity = int(total_invest_minus_target * SHIFT)
-    logging.debug(pformat([profits, weights, n_items, capacity]))
-    ks_verbose = True if logging.getLogger().level == logging.DEBUG else False
+    logger.debug(pformat([profits, weights, n_items, capacity]))
+    ks_verbose = True if logger.level == logging.DEBUG else False
     # result = solve_bounded_knapsack( profits, weights, n_items, capacity, verbose=ks_verbose)
     result = solve_unbounded_knapsack(profits, weights, capacity, verbose=ks_verbose)
     # result = knapsack(profits, weights).solve(capacity)
@@ -208,7 +210,7 @@ except mknapsack_exceptions.FortranInputCheckError as e:
         raise e
 
 
-logging.debug(list(result))
+logger.debug(list(result))
 
 total_invest_calculated = 0
 i = 0
@@ -236,7 +238,7 @@ total_invest_calculated += (
 )
 for ticker_name in [ticker_name for ticker_name, x in valid_tickers.items()]:
     if result[i] > 0:
-        logging.debug("total_invest_calculated %f", total_invest_calculated)
+        logger.debug("total_invest_calculated %f", total_invest_calculated)
         print(
             ticker_name,
             result[i],
@@ -258,5 +260,5 @@ if not args.skip_cache_write:
             payload = json.dumps(ticker_cache, indent=4)
             f.write(payload)
     except:  # noqa: E722
-        logging.error(traceback.format_exc())
-        logging.error("couldn't write cache")
+        logger.error(traceback.format_exc())
+        logger.error("couldn't write cache")
