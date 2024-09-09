@@ -13,7 +13,7 @@ SPXV,1,57.36,0.1452651,0.00090000004,0.9995288466940137,0.00000022
 
 ## `tickers.txt`
 
-`tickers.txt` is a user-provided file must be filled with a newline separated list of tickers to match against. It is the user's responsbility to source a list of securities. Generally, the larger the list, the higher quality the results from `poorboy` will be.
+`tickers.txt` is a user-provided file must be filled with a newline separated list of tickers to match against. It is the user's responsibility to source a list of securities. Generally, the larger the list, the higher quality the results from `poorboy` will be.
 
 ## `ticker_cache.json`
 

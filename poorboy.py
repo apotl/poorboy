@@ -11,7 +11,6 @@ from numpy import nan
 from pandas import DataFrame
 import logging
 
-STDEV_MAX = 99
 RETURN_FIELD = "fiveYearAverageReturn"
 CORRELATION_FIELD = "Close"
 
@@ -54,6 +53,7 @@ class Poorboy:
         total_invest_available: float,
         force_refresh_cache=False,
         skip_cache_write=False,
+        stdev_max=99
     ) -> DataFrame:
 
         try:
@@ -152,7 +152,7 @@ class Poorboy:
                 logger.error("couldn't write cache")
 
         SHIFT = 10**4
-        variance_max = STDEV_MAX**2
+        variance_max = stdev_max**2
         logger.debug(pformat(self.ticker_cache[anchor_ticker]))
 
         total_invest_minus_anchor = (
