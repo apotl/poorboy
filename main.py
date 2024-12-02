@@ -11,7 +11,9 @@ parser.add_argument(
 parser.add_argument(
     "-M", "--skip-cache-write", help="Skip cache write", action="store_true"
 )
-parser.add_argument("-S", "--stdev-max", help="Max stdev (default: no limit)", default=99)
+parser.add_argument(
+    "-S", "--stdev-max", help="Max stdev (default: no limit)", default=99
+)
 parser.add_argument("--verbose", "-v", action="count", default=0)
 args = parser.parse_args()
 
@@ -23,11 +25,13 @@ if args.verbose == 1:
 elif args.verbose > 1:
     logger.setLevel(logging.DEBUG)
 
-result = Poorboy().calculate_security_buys(
-    args.anchor_ticker,
-    float(args.total_invest_available),
-    force_refresh_cache=args.force_refresh_cache,
-    skip_cache_write=args.skip_cache_write,
-    stdev_max=float(args.stdev_max),
-)
-print(result.to_csv(index=False))
+if __name__ == "__main__":
+
+    result = Poorboy().calculate_security_buys(
+        args.anchor_ticker,
+        float(args.total_invest_available),
+        force_refresh_cache=args.force_refresh_cache,
+        skip_cache_write=args.skip_cache_write,
+        stdev_max=float(args.stdev_max),
+    )
+    print(result.to_csv(index=False))

@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 yfinance = "*"
 yahooquery = "*"
-mknapsack = "*"
 numpy = "<2"
 
 [dev-packages]

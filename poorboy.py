@@ -1,9 +1,7 @@
-from mknapsack import solve_unbounded_knapsack
 from pprint import pformat
 import yfinance as yf
 from datetime import datetime, timedelta
 import json
-import mknapsack._exceptions as mknapsack_exceptions
 import traceback
 import multiprocessing
 import yahooquery
@@ -15,6 +13,36 @@ RETURN_FIELD = "fiveYearAverageReturn"
 CORRELATION_FIELD = "Close"
 
 logger = logging.getLogger("poorboy")
+
+
+def solve_unbounded_knapsack(
+    profits: list[int], weights: list[int], capacity: int, verbose=False
+) -> list[int]:
+    # Initialize a table to store the maximum value for each subproblem
+    dp = [[0] * (capacity + 1) for _ in range(len(profits) + 1)]
+
+    # Fill the table using dynamic programming
+    for i in range(1, len(profits) + 1):
+        for j in range(1, capacity + 1):
+            if weights[i - 1] <= j:
+                dp[i][j] = max(
+                    dp[i - 1][j],
+                    profits[i - 1] * (j // weights[i - 1])
+                    + dp[i - 1][j % weights[i - 1]],
+                )
+            else:
+                dp[i][j] = dp[i - 1][j]
+
+    # Backtrack to find the quantities of each object
+    quantities = [0] * len(profits)
+    j = capacity
+    for i in range(len(profits), 0, -1):
+        if dp[i][j] != dp[i - 1][j]:
+            quantity = (dp[i][j] - dp[i - 1][j]) // profits[i - 1]
+            quantities[i - 1] += quantity
+            j -= weights[i - 1] * quantity
+
+    return quantities
 
 
 class Poorboy:
@@ -53,7 +81,7 @@ class Poorboy:
         total_invest_available: float,
         force_refresh_cache=False,
         skip_cache_write=False,
-        stdev_max=99
+        stdev_max=99,
     ) -> DataFrame:
 
         try:
@@ -78,7 +106,7 @@ class Poorboy:
                     and self.ticker_cache.get(ticker_name) is None
                 ):
                     ticker_names += [ticker_name]
-            with multiprocessing.Pool(processes=48) as p:
+            with multiprocessing.Pool(processes=12) as p:
                 p.map(self.download_stock_data, ticker_names)
             self.ticker_cache = dict(self.ticker_cache)
 
@@ -151,7 +179,7 @@ class Poorboy:
                 logger.error(traceback.format_exc())
                 logger.error("couldn't write cache")
 
-        SHIFT = 10**4
+        SHIFT = 10**2
         variance_max = stdev_max**2
         logger.debug(pformat(self.ticker_cache[anchor_ticker]))
 
@@ -192,7 +220,7 @@ class Poorboy:
         result = None
         try:
             profits = [
-                int((x["stdev"] / 10) ** -1)
+                int((x["stdev"] / SHIFT) ** -1)
                 # int((x["stdev"] / x["netExpenseRatio"]) ** -1 * SHIFT)
                 for ticker_name, x in valid_tickers.items()
             ]
@@ -212,11 +240,8 @@ class Poorboy:
                 profits, weights, capacity, verbose=ks_verbose
             )
             # result = knapsack(profits, weights).solve(capacity)
-        except mknapsack_exceptions.FortranInputCheckError as e:
-            if e.z == -1:
-                result = [0] * len(valid_tickers)
-            else:
-                raise e
+        except Exception as e:
+            raise e
 
         logger.debug(list(result))
 
