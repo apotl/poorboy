@@ -299,4 +299,5 @@ class Poorboy:
             i += 1
         result_df = DataFrame(result_df_dict)
         logger.info("total_invest_calculated %f", total_invest_calculated)
+        logger.info("cash_remaining %f", total_invest_available - total_invest_calculated)
         return result_df
