@@ -2,8 +2,18 @@
 
 Given a specific security, calculate other similar security buys constrained by a budget.
 
+## Installation
+
+Install dependencies using [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync
 ```
-$ python3 main.py VOO 200 
+
+## Usage
+
+```
+$ uv run main.py VOO 200 
 tickername,count,ask,fiveYearAverageReturn,netExpenseRatio,correlationFactor,stdev
 VOO,0,495.47,0.1447936,0.00029999999,1.0,0.00000000
 SPTM,2,67.19,0.14204541,0.00029999999,0.9996371336547825,0.00000013

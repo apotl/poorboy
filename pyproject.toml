@@ -1,0 +1,20 @@
+[project]
+name = "poorboy"
+version = "0.1.0"
+description = "Calculate similar security buys constrained by a budget"
+requires-python = ">=3.10"
+dependencies = [
+    "yfinance",
+    "yahooquery",
+    "numpy<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
