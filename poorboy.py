@@ -50,30 +50,34 @@ class Poorboy:
     ticker_cache = None
 
     def download_stock_data(self, ticker_name):
-
-        logger.info("Download " + ticker_name)
-        ticker = yf.Ticker(ticker_name)
-        yq_ticker = yahooquery.Ticker(ticker_name)
-        result = ticker.info | {
-            "history": json.loads(ticker.history(period="5y", interval="1d").to_json())
-        }
-        logger.debug(ticker_name)
-        logger.debug(yq_ticker.fund_profile[ticker_name])
         try:
-            result.update(
-                {
-                    "netExpenseRatio": yq_ticker.fund_profile[ticker_name]
-                    .get("feesExpensesInvestment")
-                    .get("annualReportExpenseRatio")
-                }
-            )
-            # result.update({"netExpenseRatio": 1})
-        except AttributeError:
-            result.update({"netExpenseRatio": None})
+            logger.info("Download " + ticker_name)
+            ticker = yf.Ticker(ticker_name)
+            yq_ticker = yahooquery.Ticker(ticker_name)
+            result = ticker.info | {
+                "history": json.loads(ticker.history(period="5y", interval="1d").to_json())
+            }
+            logger.debug(ticker_name)
+            logger.debug(yq_ticker.fund_profile[ticker_name])
+            try:
+                result.update(
+                    {
+                        "netExpenseRatio": yq_ticker.fund_profile[ticker_name]
+                        .get("feesExpensesInvestment")
+                        .get("annualReportExpenseRatio")
+                    }
+                )
+                # result.update({"netExpenseRatio": 1})
+            except AttributeError:
+                result.update({"netExpenseRatio": None})
 
-        import copy
+            import copy
 
-        self.ticker_cache[ticker_name] = copy.deepcopy(result)
+            self.ticker_cache[ticker_name] = copy.deepcopy(result)
+        except Exception as e:
+            # Re-raise as a standard exception to ensure it's picklable for multiprocessing
+            logger.error(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}")
+            raise RuntimeError(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}") from e
 
     def calculate_security_buys(
         self,
