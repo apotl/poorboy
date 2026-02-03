@@ -8,6 +8,8 @@ import yahooquery
 from numpy import nan
 from pandas import DataFrame
 import logging
+import time
+from requests.exceptions import HTTPError
 
 RETURN_FIELD = "fiveYearAverageReturn"
 CORRELATION_FIELD = "Close"
@@ -49,35 +51,60 @@ class Poorboy:
 
     ticker_cache = None
 
-    def download_stock_data(self, ticker_name):
-        try:
-            logger.info("Download " + ticker_name)
-            ticker = yf.Ticker(ticker_name)
-            yq_ticker = yahooquery.Ticker(ticker_name)
-            result = ticker.info | {
-                "history": json.loads(ticker.history(period="5y", interval="1d").to_json())
-            }
-            logger.debug(ticker_name)
-            logger.debug(yq_ticker.fund_profile[ticker_name])
+    def download_stock_data(self, ticker_name, request_delay=0.15, max_retries=3):
+        """Download stock data with rate limiting and retry logic"""
+        import copy
+
+        # Throttle requests to avoid rate limiting
+        time.sleep(request_delay)
+
+        for attempt in range(max_retries):
             try:
-                result.update(
-                    {
-                        "netExpenseRatio": yq_ticker.fund_profile[ticker_name]
-                        .get("feesExpensesInvestment")
-                        .get("annualReportExpenseRatio")
-                    }
-                )
-                # result.update({"netExpenseRatio": 1})
-            except AttributeError:
-                result.update({"netExpenseRatio": None})
+                if attempt > 0:
+                    logger.info(f"Retry {attempt}/{max_retries} for {ticker_name}")
+                else:
+                    logger.info(f"Download {ticker_name}")
 
-            import copy
+                ticker = yf.Ticker(ticker_name)
+                yq_ticker = yahooquery.Ticker(ticker_name)
+                result = ticker.info | {
+                    "history": json.loads(ticker.history(period="5y", interval="1d").to_json())
+                }
 
-            self.ticker_cache[ticker_name] = copy.deepcopy(result)
-        except Exception as e:
-            # Re-raise as a standard exception to ensure it's picklable for multiprocessing
-            logger.error(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}")
-            raise RuntimeError(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}") from e
+                logger.debug(ticker_name)
+                logger.debug(yq_ticker.fund_profile[ticker_name])
+                try:
+                    result.update(
+                        {
+                            "netExpenseRatio": yq_ticker.fund_profile[ticker_name]
+                            .get("feesExpensesInvestment")
+                            .get("annualReportExpenseRatio")
+                        }
+                    )
+                except AttributeError:
+                    result.update({"netExpenseRatio": None})
+
+                self.ticker_cache[ticker_name] = copy.deepcopy(result)
+                return  # Success - exit retry loop
+
+            except HTTPError as e:
+                # Handle rate limiting with exponential backoff
+                if hasattr(e, 'response') and e.response.status_code == 429:
+                    wait_time = 2 ** attempt  # 1s, 2s, 4s
+                    logger.warning(f"Rate limited on {ticker_name}, waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed to download {ticker_name} after {max_retries} retries: Rate limited")
+                        raise RuntimeError(f"Failed to download {ticker_name}: Rate limited after {max_retries} retries") from e
+                else:
+                    # Non-429 HTTP error
+                    logger.error(f"Failed to download {ticker_name}: HTTP {e.response.status_code}")
+                    raise RuntimeError(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}") from e
+
+            except Exception as e:
+                # Other errors (network, parsing, etc.)
+                logger.error(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}")
+                raise RuntimeError(f"Failed to download {ticker_name}: {type(e).__name__}: {str(e)}") from e
 
     def calculate_security_buys(
         self,
@@ -110,7 +137,7 @@ class Poorboy:
                     and self.ticker_cache.get(ticker_name) is None
                 ):
                     ticker_names += [ticker_name]
-            with multiprocessing.Pool(processes=12) as p:
+            with multiprocessing.Pool(processes=3) as p:
                 p.map(self.download_stock_data, ticker_names)
             self.ticker_cache = dict(self.ticker_cache)
 
