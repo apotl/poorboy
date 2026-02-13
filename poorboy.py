@@ -1,4 +1,5 @@
 from pprint import pformat
+import os
 import yfinance as yf
 from datetime import datetime, timedelta
 import json
@@ -10,6 +11,7 @@ from pandas import DataFrame
 import logging
 import time
 from requests.exceptions import HTTPError
+from ticker_cache import TickerCache
 
 RETURN_FIELD = "fiveYearAverageReturn"
 CORRELATION_FIELD = "Close"
@@ -115,18 +117,15 @@ class Poorboy:
         stdev_max=99,
     ) -> DataFrame:
 
-        try:
-            if force_refresh_cache:
-                self.ticker_cache = multiprocessing.Manager().dict()
-            else:
-                with open("ticker_cache.json") as f:
-                    self.ticker_cache = multiprocessing.Manager().dict(
-                        json.loads(f.read())
-                    )
+        db_path = "ticker_cache.db"
+        json_path = "ticker_cache.json"
 
-        except:  # noqa: E722
-            logger.error(traceback.format_exc())
-            self.ticker_cache = multiprocessing.Manager().dict()
+        if not os.path.exists(db_path) and os.path.exists(json_path):
+            TickerCache.migrate_from_json(json_path, db_path)
+
+        self.ticker_cache = TickerCache(db_path)
+        if force_refresh_cache:
+            self.ticker_cache.clear()
 
         with open("tickers.txt") as f:
             ticker_names = []
@@ -139,7 +138,7 @@ class Poorboy:
                     ticker_names += [ticker_name]
             with multiprocessing.Pool(processes=3) as p:
                 p.map(self.download_stock_data, ticker_names)
-            self.ticker_cache = dict(self.ticker_cache)
+            self.ticker_cache = self.ticker_cache.bulk_load()
 
         logger.debug(sorted(self.ticker_cache.keys()))
 
@@ -203,9 +202,7 @@ class Poorboy:
 
         if not skip_cache_write:
             try:
-                with open("ticker_cache.json", "w") as f:
-                    payload = json.dumps(self.ticker_cache, indent=4)
-                    f.write(payload)
+                TickerCache(db_path).bulk_write(self.ticker_cache)
             except:  # noqa: E722
                 logger.error(traceback.format_exc())
                 logger.error("couldn't write cache")

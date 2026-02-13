@@ -1,3 +1,7 @@
 *.pyc
 ticker_cache.json
+ticker_cache.json.bak
+*.db
+*.db-wal
+*.db-shm
 tickers.txt
