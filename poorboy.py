@@ -124,8 +124,6 @@ class Poorboy:
             TickerCache.migrate_from_json(json_path, db_path)
 
         self.ticker_cache = TickerCache(db_path)
-        if force_refresh_cache:
-            self.ticker_cache.clear()
 
         with open("tickers.txt") as f:
             ticker_names = []
@@ -133,7 +131,7 @@ class Poorboy:
                 ticker_name = ticker_name.strip()
                 if (
                     not ticker_name.startswith("#")
-                    and self.ticker_cache.get(ticker_name) is None
+                    and (force_refresh_cache or self.ticker_cache.get(ticker_name) is None)
                 ):
                     ticker_names += [ticker_name]
             with multiprocessing.Pool(processes=3) as p:
@@ -202,7 +200,10 @@ class Poorboy:
 
         if not skip_cache_write:
             try:
-                TickerCache(db_path).bulk_write(self.ticker_cache)
+                cache = TickerCache(db_path)
+                if force_refresh_cache:
+                    cache.clear()
+                cache.bulk_write(self.ticker_cache)
             except:  # noqa: E722
                 logger.error(traceback.format_exc())
                 logger.error("couldn't write cache")
